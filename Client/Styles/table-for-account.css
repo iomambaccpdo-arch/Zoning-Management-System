@@ -1,0 +1,39 @@
+/* Tables for accounts */
+.table-basic { 
+    width: 100%; 
+    border-collapse: collapse;
+    background:#ffffff; border:1px solid #e5e7eb; 
+    border-radius:8px; overflow:hidden; 
+}
+
+.table-basic th, .table-basic td { 
+    padding:10px 12px; 
+    border-bottom:1px solid #e5e7eb; 
+    text-align:left; 
+    font-size:13px; 
+    color:#111827; }
+
+.table-basic thead th { 
+    background:#f3f4f6; 
+    color:#6b7280; 
+    font-weight:600; }
+
+.actions { 
+    display:flex; 
+    gap:8px; }
+
+.btn--danger { 
+    background:#ef4444;
+    border-color:#ef4444; 
+    color:#ffffff; }
+
+.btn--danger:hover { 
+    background:#dc2626; }
+
+.btn--success { 
+    background:#22c55e; 
+    border-color:#22c55e; 
+    color:#ffffff; }
+
+.btn--success:hover { 
+    background:#16a34a; }

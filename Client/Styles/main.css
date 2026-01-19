@@ -1,0 +1,169 @@
+/* Main */
+.main { 
+    padding: 20px 28px; 
+}
+
+.header { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    gap: 16px; 
+}
+
+.header h1 { 
+    font-size: 30px; 
+    font-weight: 700; 
+    margin: 0; 
+    letter-spacing: .2px; 
+}
+
+.btn { 
+    display: inline-flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 8px; border: 1px solid #d1d5db; 
+    background: #ffffff; color: #111827; 
+    padding: 8px 12px; 
+    border-radius: 8px; 
+    font-weight: 600; 
+}
+
+.btn:hover { 
+    background: #f3f4f6; 
+}
+
+.btn--primary { 
+    background: #22c55e; 
+    border-color: #22c55e; 
+    color: #ffffff; 
+}
+
+.btn--primary:hover { 
+    background: #16a34a; 
+}
+
+.btn--muted { 
+    background: #ffffff;
+}
+
+.btn--small { 
+    padding: 6px 8px; 
+    font-size: 12px; 
+}
+
+.w-100 { 
+    width: 100%; 
+}
+
+.section { 
+    margin-top: 20px; 
+}
+
+.section__title { 
+    font-size: 14px; 
+    font-weight: 700; 
+    color: #6b7280; 
+    margin: 0 0 10px; 
+}
+
+.grid { 
+    display: grid; 
+    gap: 14px; 
+}
+
+.grid--4 { 
+    grid-template-columns: repeat(4, minmax(0, 1fr)); 
+}
+
+.month-card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  transition: all 0.25s ease; /* smooth hover animation */
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.month-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: #166534; /* green accent */
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.1);
+  background-color: #f9fafb;
+}
+
+.month-card__title {
+  font-size: 12px;
+  color: #6b7280;
+  transition: color 0.2s ease;
+}
+
+.month-card__title strong {
+  color: #111827;
+  font-size: 14px;
+}
+
+.month-card__meta {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.month-card__link {
+  font-size: 12px;
+  align-self: start;
+  color: #166534;
+  font-weight: 500;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+.month-card:hover .month-card__link {
+  color: #0f5132;
+  text-decoration: underline;
+}
+
+.month-card:active {
+  transform: scale(0.98);
+}
+
+
+.table { 
+    border: 1px solid #e5e7eb;
+    border-radius: 8px; 
+    overflow: hidden; 
+    background: #ffffff; 
+}
+
+.table__head, .table__row { 
+    display: grid; 
+    grid-template-columns: 1fr 240px; 
+}
+
+.table__head { 
+    background: #f3f4f6; 
+    color: #6b7280; 
+    font-weight: 600; 
+    font-size: 12px; 
+}
+
+.table__head > div, .table__row > div { 
+    padding: 10px 12px; 
+    border-bottom: 1px solid #e5e7eb; 
+}
+
+.table__row { 
+    background: #ffffff; 
+    color: #111827; 
+    transition: background-color 0.2s ease;
+}
+
+.table__row:nth-child(even) { 
+    background: #fafafa; 
+}
+
+.table__row:hover {
+    background: #f3f4f6 !important;
+}
+
+/* Sidebar positioning intentionally left to sidebar.css to avoid global layout overrides */

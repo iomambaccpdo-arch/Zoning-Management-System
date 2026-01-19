@@ -1,0 +1,74 @@
+
+
+    /* --- Modal Styling --- */
+    .modal {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal__content {
+      background: #fff;
+      padding: 20px 25px;
+      border-radius: 10px;
+      width: 400px;
+      max-width: 90%;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+
+    .modal__content h2 {
+      margin-bottom: 15px;
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .modal__content label {
+      display: block;
+      font-size: 14px;
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+
+    .modal__content input, 
+    .modal__content select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+
+    .modal__actions {
+      margin-top: 15px;
+      text-align: right;
+    }
+
+    .modal__actions button {
+      margin-left: 5px;
+    }
+
+    /* ✅ Success Popup */
+    .success-popup {
+      position: fixed;
+      top: 30px;
+      right: 30px;
+      background: #16a34a;
+      color: white;
+      padding: 14px 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+      font-weight: 500;
+      display: none;
+      z-index: 2000;
+      animation: slideDown 0.3s ease;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+ 

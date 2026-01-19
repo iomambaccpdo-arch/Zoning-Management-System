@@ -1,0 +1,52 @@
+.date-time-group {
+  display: flex;
+  gap: 20px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.date-time-group > div {
+  flex: 1;
+  min-width: 220px;
+}
+
+.date-time-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.date-time-group input[type="date"],
+.date-time-group input[type="time"] {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: 'Inter', sans-serif;
+}
+
+#dueDate {
+  background-color: #f0f8ff;
+  border: 1px solid #b0d4ff;
+  color: #003366;
+  font-weight: 600;
+}
+
+select.input {
+  appearance: none;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  width: 100%;
+  cursor: pointer;
+}
+
+select.input:focus {
+  border-color: #007bff;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+}

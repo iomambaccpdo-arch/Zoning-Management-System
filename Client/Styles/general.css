@@ -1,0 +1,43 @@
+/* Genral */
+* { 
+  box-sizing: border-box; 
+  
+}
+
+html, body {
+  height: 100%; 
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+  background: #f5f7fb; /* light app background */
+  color: #111827;
+  font-weight: 500;
+  margin-left: 10px;
+}
+
+a {
+  color: #166534;
+  text-decoration: none;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr; 
+  min-height: 100vh; 
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+

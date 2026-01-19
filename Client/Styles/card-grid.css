@@ -1,0 +1,71 @@
+/* Cards grid used on Documents page */
+.filegrid { 
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr)); 
+    gap: 14px; 
+}
+
+.filecard { 
+    background:#ffffff; 
+    border:1px solid #e5e7eb; 
+    border-radius:8px; padding:12px; 
+    display:grid; 
+    gap:8px; 
+}
+
+.filecard__date { 
+    color:#059669; 
+    font-size:12px; 
+}
+
+.filecard__title { 
+    color:#111827; 
+    font-weight:600; 
+    font-size:13px; 
+}
+
+.filecard__link { 
+    font-size:12px; 
+    color:#166534; 
+}
+
+.filecard {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.25s ease;
+  cursor: pointer;
+}
+
+.filecard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  border-color: #16a34a; /* subtle green border highlight */
+  background-color: #f9fffb; /* light green tint */
+}
+
+.filecard__date {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.filecard__title {
+  font-weight: 600;
+  color: #111827;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+.filecard__link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #166534;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.filecard__link:hover {
+  color: #0f5132; /* darker green when hovered */
+}

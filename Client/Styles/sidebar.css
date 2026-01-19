@@ -1,0 +1,101 @@
+/* Sidebar */
+.sidebar { 
+    background: #ffffff; 
+    border-right: 1px solid #e5e7eb; 
+    display: flex; 
+    flex-direction: column; 
+}
+
+.brand { 
+    padding: 16px; 
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    border-bottom: 1px solid #e5e7eb; 
+}
+
+.brand__logo { 
+    width: 96px; 
+    height: 96px; 
+    object-fit: contain; 
+    filter: drop-shadow(0 0 0 rgba(0,0,0,0)); 
+}
+
+.nav { 
+    padding: 8px; 
+    display: grid; 
+    gap: 6px; }
+
+.nav__item { 
+    display: grid; 
+    grid-template-columns: 24px 1fr; 
+    align-items: center; gap: 12px; 
+    padding: 10px 12px; 
+    border-radius: 8px; 
+    color: #374151; 
+}
+
+.nav__item:hover { 
+    background: #f3f4f6; 
+}
+
+.nav__item--active { 
+    background: #e8f7ef; 
+    color: #065f46; 
+}
+
+.nav__icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    line-height: 1;
+    opacity: .95;
+}
+
+.sidebar__footer { 
+    margin-top: auto; 
+    padding: 12px; 
+    border-top: 1px solid #e5e7eb; 
+}
+
+.usercard { 
+    font-size: 12px; 
+    color: #6b7280; 
+    margin-bottom: 10px; 
+}
+
+.usercard__name {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 2px;
+}
+
+.usercard__role { 
+    font-weight: 600; 
+    color: #374151;
+    margin-bottom: 2px;
+}
+
+.usercard__email { 
+    margin: 2px 0 6px;
+}
+
+.usercard__status { 
+    display: flex; 
+    gap: 6px; 
+    align-items: center; 
+}
+
+.badge { 
+    width: 8px; 
+    height: 8px; 
+    border-radius: 999px; 
+    display: inline-block; 
+}
+
+.badge--online { 
+    background: #2ea043; 
+}

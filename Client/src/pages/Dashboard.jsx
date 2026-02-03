@@ -73,7 +73,18 @@ function Dashboard() {
     if (monthsToShow.length === 0) {
       return (
         <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '2em', color: '#666' }}>
-          No documents found. <Link to="/new-document" style={{ color: '#2563eb' }}>Create your first document</Link>
+          No documents found.{' '}
+          <Link
+            to="/new-document"
+            style={{ color: '#2563eb' }}
+            onClick={() => {
+              localStorage.setItem('documentFormMode', 'create')
+              localStorage.removeItem('editIndex')
+              localStorage.removeItem('editDocument')
+            }}
+          >
+            Create your first document
+          </Link>
         </div>
       )
     }
@@ -297,7 +308,17 @@ function Dashboard() {
         <header className="header">
           <h1>CPDO ZONING MANAGEMENT SYSTEM DASHBOARD</h1>
           {canCreateDocument && (
-            <Link className="btn btn--primary" to="/new-document">➕ New Document</Link>
+            <Link
+              className="btn btn--primary"
+              to="/new-document"
+              onClick={() => {
+                localStorage.setItem('documentFormMode', 'create')
+                localStorage.removeItem('editIndex')
+                localStorage.removeItem('editDocument')
+              }}
+            >
+              ➕ New Document
+            </Link>
           )}
         </header>
 

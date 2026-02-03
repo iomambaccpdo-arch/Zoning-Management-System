@@ -9,6 +9,10 @@ function NewDocument() {
   const fileInputRef = useRef(null)
   const zoningSelectRef = useRef(null)
   const projectTypeSelectRef = useRef(null)
+
+  // Form mode: 'create' | 'edit'
+  // This prevents the "last edited document" from leaking into New Document.
+  const [mode, setMode] = useState(() => localStorage.getItem('documentFormMode') || 'create')
   
   const [formData, setFormData] = useState({
     title: '',
@@ -40,24 +44,69 @@ function NewDocument() {
   const [fileNames, setFileNames] = useState('No file attached')
   const [editIndex, setEditIndex] = useState(null)
 
+  const clearEditState = () => {
+    localStorage.removeItem('editIndex')
+    localStorage.removeItem('editDocument')
+  }
+
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      zoning: '',
+      znApplication: '',
+      projectType: '',
+      dateOfApplication: '',
+      dueDate: '',
+      receivedBy: '',
+      assistedBy: '',
+      applicantName: '',
+      routedTo: [],
+      floorArea: '',
+      barangay: '',
+      purok: '',
+      lotArea: '',
+      storey: '',
+      landmark: '',
+      mezanine: '',
+      oic: ''
+    })
+    setSelectedFiles([])
+    setExistingFiles([])
+    setFileNames('No file attached')
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
   useEffect(() => {
-    // Check if editing
-    const editIdx = localStorage.getItem('editIndex')
-    const editDoc = JSON.parse(localStorage.getItem('editDocument') || 'null')
-    
-    if (editDoc && editIdx !== null) {
-      setEditIndex(parseInt(editIdx))
-      if (editDoc.files && Array.isArray(editDoc.files) && editDoc.files.length > 0) {
-        setExistingFiles(editDoc.files)
-        displayAllFiles(editDoc.files, [])
-      } else if (editDoc.fileNames && Array.isArray(editDoc.fileNames)) {
-        const placeholderFiles = editDoc.fileNames.map(name => ({ name, type: '', data: '' }))
-        setExistingFiles(placeholderFiles)
-        displayAllFiles(placeholderFiles, [])
+    // Decide behavior based on explicit mode
+    const currentMode = localStorage.getItem('documentFormMode') || 'create'
+    setMode(currentMode)
+
+    if (currentMode === 'edit') {
+      const editIdx = localStorage.getItem('editIndex')
+      const editDoc = JSON.parse(localStorage.getItem('editDocument') || 'null')
+      if (editDoc && editIdx !== null) {
+        setEditIndex(parseInt(editIdx))
+        if (editDoc.files && Array.isArray(editDoc.files) && editDoc.files.length > 0) {
+          setExistingFiles(editDoc.files)
+          displayAllFiles(editDoc.files, [])
+        } else if (editDoc.fileNames && Array.isArray(editDoc.fileNames)) {
+          const placeholderFiles = editDoc.fileNames.map(name => ({ name, type: '', data: '' }))
+          setExistingFiles(placeholderFiles)
+          displayAllFiles(placeholderFiles, [])
+        }
+      } else {
+        // invalid edit state -> fall back to create
+        clearEditState()
+        localStorage.setItem('documentFormMode', 'create')
+        setMode('create')
+        setEditIndex(null)
+        resetForm()
       }
     } else {
-      localStorage.removeItem('editIndex')
-      localStorage.removeItem('editDocument')
+      // create mode -> always clear edit cache and reset form
+      clearEditState()
+      setEditIndex(null)
+      resetForm()
     }
 
     loadZoningData()
@@ -196,6 +245,11 @@ function NewDocument() {
   }
 
   const populateEditForm = (doc) => {
+    // Guarantee required readOnly fields are never empty (prevents submit being blocked)
+    const today = new Date()
+    const fallbackDate = formatLongDate(today)
+    const fallbackDue = formatLongDate(addWorkingDays(today, 12))
+
     // Parse routedTo - could be JSON string, array, or single value
     let routedToValue = []
     if (doc.routedTo) {
@@ -218,8 +272,8 @@ function NewDocument() {
       zoning: doc.zoning || '',
       znApplication: doc.znApp || '',
       projectType: doc.projectType || '',
-      dateOfApplication: doc.dateOfApp || '',
-      dueDate: doc.dueDate || '',
+      dateOfApplication: doc.dateOfApp || fallbackDate,
+      dueDate: doc.dueDate || fallbackDue,
       receivedBy: doc.receivedBy || '',
       assistedBy: doc.assistedBy || '',
       applicantName: doc.applicantName || '',
@@ -377,6 +431,9 @@ function NewDocument() {
     } else {
       docs.unshift(newDoc)
     }
+
+    // After save, always return to create mode
+    localStorage.setItem('documentFormMode', 'create')
 
     docs.sort((a, b) => {
       const dateA = a.dateSort ? new Date(a.dateSort) : new Date(a.dateAdded || a.dateCreated || 0)

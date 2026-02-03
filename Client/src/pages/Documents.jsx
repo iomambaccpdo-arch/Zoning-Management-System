@@ -89,6 +89,8 @@ function Documents() {
     const originalIndex = documents.findIndex(doc => doc === filteredDocs[index])
     if (originalIndex === -1) return
     
+    // Explicitly mark that the form should open in EDIT mode
+    localStorage.setItem('documentFormMode', 'edit')
     localStorage.setItem('editIndex', originalIndex)
     localStorage.setItem('editDocument', JSON.stringify(documents[originalIndex]))
     navigate('/new-document')
@@ -121,7 +123,19 @@ function Documents() {
               {areaUnit}
             </button>
             {!isViewerRole && (
-              <Link id="addNewBtn" className="btn btn--primary" to="/new-document">➕ Add New</Link>
+              <Link
+                id="addNewBtn"
+                className="btn btn--primary"
+                to="/new-document"
+                onClick={() => {
+                  // Explicitly mark CREATE mode and clear any stale edit state
+                  localStorage.setItem('documentFormMode', 'create')
+                  localStorage.removeItem('editIndex')
+                  localStorage.removeItem('editDocument')
+                }}
+              >
+                ➕ Add New
+              </Link>
             )}
           </div>
         </header>

@@ -10,6 +10,8 @@ function Settings() {
   const [userProfile, setUserProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [hasError, setHasError] = useState(false)
+  
+  console.log('[Settings] Component rendered, isLoading:', isLoading, 'currentUser:', currentUser)
   const [formData, setFormData] = useState({
     userName: '',
     userDesignation: '',
@@ -34,17 +36,18 @@ function Settings() {
   useEffect(() => {
     const loadSettings = () => {
       try {
-        setIsLoading(true)
         const user = getCurrentUser()
         
+        console.log('[Settings] Loading settings, currentUser:', user)
+        
         if (!user) {
-          alert('⚠️ No user session found. Please log in again.')
+          console.warn('[Settings] No user found, redirecting to login')
           navigate('/login')
-          setIsLoading(false)
           return
         }
 
         setCurrentUser(user)
+        console.log('[Settings] User set:', user)
 
         let allUsers = []
         try {
@@ -65,7 +68,6 @@ function Settings() {
         if (!profile) {
           console.warn('User profile not found in users array, using session data:', user)
           // Still show the form with currentUser data if profile not found
-          // This allows the user to update their session info even if not in users array
           const sessionProfile = {
             ...user,
             name: user.name || '',
@@ -76,7 +78,7 @@ function Settings() {
             role: user.role || '',
             username: user.username || '',
             email: user.email || '',
-            password: '' // Can't retrieve password, will require re-entering current password
+            password: ''
           }
           setUserProfile(sessionProfile)
           setFormData({
@@ -89,44 +91,32 @@ function Settings() {
             newUsername: user.username || '',
             newEmail: user.email || ''
           })
-          setIsLoading(false)
-          return
+        } else {
+          setUserProfile(profile)
+          const fullName = profile.name || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || user.name || ''
+          const initialFormData = {
+            userName: fullName,
+            userDesignation: profile.designation || user.designation || '',
+            userSection: profile.section || user.section || '',
+            userRole: profile.role || user.role || '',
+            currentUsername: profile.username || user.username || '',
+            currentEmail: profile.email || user.email || '',
+            newUsername: profile.username || user.username || '',
+            newEmail: profile.email || user.email || ''
+          }
+          console.log('[Settings] Setting formData:', initialFormData)
+          setFormData(initialFormData)
         }
-
-        setUserProfile(profile)
-        const fullName = profile.name || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || user.name || ''
-        setFormData({
-          userName: fullName,
-          userDesignation: profile.designation || user.designation || '',
-          userSection: profile.section || user.section || '',
-          userRole: profile.role || user.role || '',
-          currentUsername: profile.username || user.username || '',
-          currentEmail: profile.email || user.email || '',
-          newUsername: profile.username || user.username || '',
-          newEmail: profile.email || user.email || ''
-        })
+        
         setIsLoading(false)
+        console.log('[Settings] Loading complete, isLoading set to false')
       } catch (error) {
         console.error('Error loading settings:', error)
         setHasError(true)
-        setIsLoading(false)
         // Set a fallback profile so the page can still render
         const fallbackUser = getCurrentUser()
         if (fallbackUser) {
           setCurrentUser(fallbackUser)
-          const fallbackProfile = {
-            ...fallbackUser,
-            name: fallbackUser.name || '',
-            firstName: '',
-            lastName: '',
-            designation: fallbackUser.designation || '',
-            section: fallbackUser.section || '',
-            role: fallbackUser.role || '',
-            username: fallbackUser.username || '',
-            email: fallbackUser.email || '',
-            password: ''
-          }
-          setUserProfile(fallbackProfile)
           setFormData({
             userName: fallbackUser.name || '',
             userDesignation: fallbackUser.designation || '',
@@ -138,11 +128,37 @@ function Settings() {
             newEmail: fallbackUser.email || ''
           })
         }
+        setIsLoading(false)
       }
     }
     
     loadSettings()
   }, [navigate])
+
+  // Ensure formData is initialized with currentUser data if empty.
+  // IMPORTANT: this must be declared before any conditional returns (hooks must be unconditional),
+  // otherwise Settings can render a blank page due to a hooks order violation.
+  useEffect(() => {
+    if (!currentUser) return
+    if (userProfile) return
+    if (formData.userName !== '' || formData.currentUsername !== '') return
+
+    setFormData({
+      userName: currentUser.name || '',
+      userDesignation: currentUser.designation || '',
+      userSection: currentUser.section || '',
+      userRole: currentUser.role || '',
+      currentUsername: currentUser.username || '',
+      currentEmail: currentUser.email || '',
+      newUsername: currentUser.username || '',
+      newEmail: currentUser.email || '',
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: ''
+    })
+    // We intentionally do not include formData in deps to avoid loops; we gate on its emptiness above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, userProfile])
 
   const checkPasswordStrength = (password) => {
     if (!password) {
@@ -166,12 +182,14 @@ function Settings() {
   }
 
   const checkPasswordMatch = () => {
-    if (formData.confirmPassword.length === 0) {
+    const confirm = formData.confirmPassword ?? ''
+    if (confirm.length === 0) {
       setPasswordMatch('')
       return
     }
 
-    if (formData.newPassword === formData.confirmPassword) {
+    const newPwd = formData.newPassword ?? ''
+    if (newPwd === confirm) {
       setPasswordMatch('✅ Passwords match')
     } else {
       setPasswordMatch('❌ Passwords do not match')
@@ -216,12 +234,12 @@ function Settings() {
         return
       }
 
-      if (formData.newPassword !== formData.confirmPassword) {
+      if ((formData.newPassword ?? '') !== (formData.confirmPassword ?? '')) {
         alert('⚠️ New passwords do not match.')
         return
       }
 
-      if (formData.newPassword.length < 6) {
+      if ((formData.newPassword ?? '').length < 6) {
         alert('⚠️ New password must be at least 6 characters long.')
         return
       }
@@ -328,7 +346,8 @@ function Settings() {
       const closeModal = () => {
         if (window.settingsOverlay) document.body.removeChild(window.settingsOverlay)
         if (window.settingsModal) document.body.removeChild(window.settingsModal)
-        window.location.reload()
+        // Use React Router navigation instead of full page reload
+        navigate('/settings', { replace: true })
       }
 
       okButton.addEventListener('click', closeModal)
@@ -340,56 +359,40 @@ function Settings() {
     }
   }
 
-  // Loading state
-  if (isLoading) {
-    return (
-      <Layout>
-        <main className="main">
-          <div style={{ padding: '2em', textAlign: 'center' }}>
-            <div>Loading user settings...</div>
-            <div style={{ marginTop: '1em', fontSize: '0.9em', color: '#666' }}>
-              Please wait...
-            </div>
-          </div>
-        </main>
-      </Layout>
-    )
-  }
-
-  // No user - redirect handled in useEffect, but show fallback
+  // If no user, show message (redirect should have happened in useEffect)
   if (!currentUser) {
+    console.log('[Settings] No currentUser, rendering fallback')
     return (
       <Layout>
         <main className="main">
-          <div style={{ padding: '2em', textAlign: 'center' }}>Please log in to access settings.</div>
+          <header className="header">
+            <h1>CPDO ZONING MANAGEMENT SYSTEM SETTINGS</h1>
+          </header>
+          <section className="section">
+            <div style={{ padding: '2em', textAlign: 'center' }}>
+              {isLoading ? 'Loading user settings...' : 'Please log in to access settings.'}
+            </div>
+          </section>
         </main>
       </Layout>
     )
   }
 
-  // Ensure formData is initialized with currentUser data if empty
-  useEffect(() => {
-    if (currentUser && !userProfile && formData.userName === '' && formData.currentUsername === '') {
-      setFormData({
-        userName: currentUser.name || '',
-        userDesignation: currentUser.designation || '',
-        userSection: currentUser.section || '',
-        userRole: currentUser.role || '',
-        currentUsername: currentUser.username || '',
-        currentEmail: currentUser.email || '',
-        newUsername: currentUser.username || '',
-        newEmail: currentUser.email || '',
-        currentPassword: '',
-        newPassword: '',
-        confirmPassword: ''
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser, userProfile])
+  console.log('[Settings] Rendering main form, currentUser:', currentUser, 'formData:', formData, 'isLoading:', isLoading)
+
+  // Ensure we have formData values, use currentUser as fallback
+  const displayName = formData.userName || currentUser?.name || ''
+  const displayDesignation = formData.userDesignation || currentUser?.designation || ''
+  const displaySection = formData.userSection || currentUser?.section || ''
+  const displayRole = formData.userRole || currentUser?.role || ''
+  const displayCurrentUsername = formData.currentUsername || currentUser?.username || ''
+  const displayCurrentEmail = formData.currentEmail || currentUser?.email || ''
+  const displayNewUsername = formData.newUsername || displayCurrentUsername
+  const displayNewEmail = formData.newEmail || displayCurrentEmail
 
   return (
     <Layout>
-      <main className="main">
+      <main className="main" style={{ minHeight: '100vh' }}>
         <header className="header">
           <h1>CPDO ZONING MANAGEMENT SYSTEM SETTINGS</h1>
           <div className="actions">
@@ -397,7 +400,7 @@ function Settings() {
           </div>
         </header>
 
-        <section className="section">
+        <section className="section" style={{ padding: '2em' }}>
           {hasError && (
             <div style={{ padding: '1em', margin: '1em 0', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b' }}>
               ⚠️ Warning: Could not load full user profile. You can still update your session information.
@@ -408,21 +411,21 @@ function Settings() {
             <div className="form__row">
               <div>
                 <label className="label">Full Name</label>
-                <input className="input" type="text" id="userName" readOnly value={formData.userName || currentUser?.name || ''} />
+                <input className="input" type="text" id="userName" readOnly value={displayName} />
               </div>
               <div>
                 <label className="label">Designation</label>
-                <input className="input" type="text" id="userDesignation" readOnly value={formData.userDesignation || currentUser?.designation || ''} />
+                <input className="input" type="text" id="userDesignation" readOnly value={displayDesignation} />
               </div>
             </div>
             <div className="form__row">
               <div>
                 <label className="label">Section</label>
-                <input className="input" type="text" id="userSection" readOnly value={formData.userSection || currentUser?.section || ''} />
+                <input className="input" type="text" id="userSection" readOnly value={displaySection} />
               </div>
               <div>
                 <label className="label">Role</label>
-                <input className="input" type="text" id="userRole" readOnly value={formData.userRole || currentUser?.role || ''} />
+                <input className="input" type="text" id="userRole" readOnly value={displayRole} />
               </div>
             </div>
             <div className="spacer"></div>
@@ -430,7 +433,7 @@ function Settings() {
             <div className="form__row">
               <div>
                 <label className="label">Current Username</label>
-                <input className="input" type="text" id="currentUsername" readOnly value={formData.currentUsername || currentUser?.username || ''} />
+                <input className="input" type="text" id="currentUsername" readOnly value={displayCurrentUsername} />
               </div>
               <div>
                 <label className="label">New Username</label>
@@ -439,7 +442,7 @@ function Settings() {
                   type="text"
                   id="newUsername"
                   placeholder="Enter new username"
-                  value={formData.newUsername}
+                  value={displayNewUsername}
                   onChange={(e) => setFormData({ ...formData, newUsername: e.target.value })}
                 />
               </div>
@@ -447,7 +450,7 @@ function Settings() {
             <div className="form__row">
               <div>
                 <label className="label">Current Email</label>
-                <input className="input" type="email" id="currentEmail" readOnly value={formData.currentEmail || currentUser?.email || ''} />
+                <input className="input" type="email" id="currentEmail" readOnly value={displayCurrentEmail} />
               </div>
               <div>
                 <label className="label">New Email</label>
@@ -456,7 +459,7 @@ function Settings() {
                   type="email"
                   id="newEmail"
                   placeholder="Enter new email"
-                  value={formData.newEmail}
+                  value={displayNewEmail}
                   onChange={(e) => setFormData({ ...formData, newEmail: e.target.value })}
                 />
               </div>

@@ -53,7 +53,10 @@ function Sidebar() {
           </Link>
         )}
         {!hidden.settings && (
-          <Link className={`nav__item ${isActive('/settings') ? 'nav__item--active' : ''}`} to="/settings">
+          <Link 
+            className={`nav__item ${isActive('/settings') ? 'nav__item--active' : ''}`} 
+            to="/settings"
+          >
             <span className="nav__icon">⚙️</span>
             <span>Settings</span>
           </Link>

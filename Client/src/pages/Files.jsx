@@ -207,7 +207,17 @@ function Files() {
           <div className="actions">
             <button className="btn" onClick={() => navigate(-1)}>← Back</button>
             {!isViewerRole && (
-              <Link className="btn btn--primary" to="/new-document">➕ Create New</Link>
+              <Link
+                className="btn btn--primary"
+                to="/new-document"
+                onClick={() => {
+                  localStorage.setItem('documentFormMode', 'create')
+                  localStorage.removeItem('editIndex')
+                  localStorage.removeItem('editDocument')
+                }}
+              >
+                ➕ Create New
+              </Link>
             )}
           </div>
         </header>

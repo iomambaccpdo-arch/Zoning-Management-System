@@ -2,9 +2,22 @@
 
 This project has been migrated from vanilla HTML/CSS/JavaScript to React. All functionality and styles have been preserved.
 
+## Clone and run (e.g. on another desktop)
+
+**Important:** The app must be run from inside the **`Client`** folder.
+
+```bash
+git clone https://github.com/iomambaccpdo-arch/Zoning-Management-System.git
+cd Zoning-Management-System/Client
+npm install
+npm run dev
+```
+
+Then open `http://localhost:3000`. Log in (seed an admin user in localStorage if needed; see Default Users below).
+
 ## Setup Instructions
 
-1. **Install Dependencies**
+1. **Install Dependencies** (from the `Client` folder)
    ```bash
    npm install
    ```
@@ -91,18 +104,26 @@ You may need to create initial users through the Accounts page (Admin access req
 
 Example user structure:
 ```json
-{
-  "firstName": "John",
-  "lastName": "Doe",
-  "name": "John Doe",
-  "username": "admin",
-  "email": "admin@example.com",
-  "password": "admin123",
-  "role": "Admin",
-  "designation": "CPDC",
-  "section": "Plans"
-}
+const users = [{
+  firstName: "Admin",
+  lastName: "User",
+  name: "Admin User",
+  username: "admin",
+  email: "admin@example.com",
+  password: "admin123",
+  role: "Admin",
+  designation: "CPDC",
+  section: "Plans"
+}];
+localStorage.setItem('users', JSON.stringify(users));
 ```
+
+## If the Settings page is blank
+
+1. **Use the latest code:** `git pull origin main` (commit should include "Fix Settings page" – Layout, flex CSS, and safe formData checks).
+2. **Run from the right folder:** Always `cd Client` then `npm run dev`. Do not run from the repo root.
+3. **Hard refresh:** In the browser press `Ctrl+Shift+R` (or `Cmd+Shift+R` on Mac) to clear cache.
+4. **Be logged in:** Settings requires a logged-in user. If you have no users, seed one in the browser console (see Default Users), then log in and open Settings again.
 
 ## Browser Support
 

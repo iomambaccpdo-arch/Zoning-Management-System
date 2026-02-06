@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { getCurrentUser } from '../utils/auth'
+import { usersAPI, logsAPI } from '../utils/api'
+import { formatDateTime } from '../utils/dateFormat'
 
 function Settings() {
   const navigate = useNavigate()
@@ -33,8 +35,25 @@ function Settings() {
   const [passwordStrength, setPasswordStrength] = useState({ text: 'Enter a password', class: '' })
   const [passwordMatch, setPasswordMatch] = useState('')
 
+  // Activity Logs (Admin only)
+  const [logs, setLogs] = useState([])
+  const [logsPagination, setLogsPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 })
+  const [logsLoading, setLogsLoading] = useState(false)
+  const [logsFilters, setLogsFilters] = useState({
+    search: '',
+    user: '',
+    module: '',
+    action: '',
+    dateFrom: '',
+    dateTo: ''
+  })
+  const [logsFiltersApplied, setLogsFiltersApplied] = useState({})
+  const [showLogsModal, setShowLogsModal] = useState(false)
+  const [logsSortBy, setLogsSortBy] = useState('created_at')
+  const [logsSortOrder, setLogsSortOrder] = useState('desc')
+
   useEffect(() => {
-    const loadSettings = () => {
+    const loadSettings = async () => {
       try {
         const user = getCurrentUser()
         
@@ -51,10 +70,9 @@ function Settings() {
 
         let allUsers = []
         try {
-          const usersStr = localStorage.getItem('users')
-          allUsers = usersStr ? JSON.parse(usersStr) : []
+          allUsers = await usersAPI.getAll()
         } catch (e) {
-          console.error('Error parsing users from localStorage:', e)
+          console.error('Error loading users from API:', e)
           allUsers = []
         }
         setUsers(allUsers)
@@ -70,15 +88,15 @@ function Settings() {
           // Still show the form with currentUser data if profile not found
           const sessionProfile = {
             ...user,
+            id: user.id,
             name: user.name || '',
-            firstName: '',
-            lastName: '',
+            first_name: '',
+            last_name: '',
             designation: user.designation || '',
             section: user.section || '',
             role: user.role || '',
             username: user.username || '',
-            email: user.email || '',
-            password: ''
+            email: user.email || ''
           }
           setUserProfile(sessionProfile)
           setFormData({
@@ -93,7 +111,7 @@ function Settings() {
           })
         } else {
           setUserProfile(profile)
-          const fullName = profile.name || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || user.name || ''
+          const fullName = profile.name || `${profile.first_name || ''} ${profile.last_name || ''}`.trim() || user.name || ''
           const initialFormData = {
             userName: fullName,
             userDesignation: profile.designation || user.designation || '',
@@ -169,7 +187,7 @@ function Settings() {
     let strength = 0
     if (password.length > 5) strength++
     if (/[A-Z]/.test(password)) strength++
-    if (/[0-9]/.test(password)) strength++
+    if (/[0-9]/.test(password)) strength++	
     if (/[^A-Za-z0-9]/.test(password)) strength++
 
     if (strength <= 1) {
@@ -208,7 +226,87 @@ function Settings() {
     checkPasswordMatch()
   }, [formData.newPassword, formData.confirmPassword])
 
-  const handleUpdate = (e) => {
+  const loadLogs = async (page = 1) => {
+    if (!currentUser || currentUser.role !== 'Admin') return
+    setLogsLoading(true)
+    try {
+      const params = {
+        page,
+        limit: logsPagination.limit,
+        ...(logsFiltersApplied.search && { search: logsFiltersApplied.search }),
+        ...(logsFiltersApplied.user && { user: logsFiltersApplied.user }),
+        ...(logsFiltersApplied.module && { module: logsFiltersApplied.module }),
+        ...(logsFiltersApplied.action && { action: logsFiltersApplied.action }),
+        ...(logsFiltersApplied.dateFrom && { dateFrom: logsFiltersApplied.dateFrom }),
+        ...(logsFiltersApplied.dateTo && { dateTo: logsFiltersApplied.dateTo })
+      }
+      const data = await logsAPI.getLogs(params)
+      setLogs(data.logs || [])
+      setLogsPagination(prev => ({ ...prev, ...data.pagination, page: data.pagination?.page || page }))
+    } catch (err) {
+      console.error('Load logs error:', err)
+      setLogs([])
+    } finally {
+      setLogsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (currentUser?.role === 'Admin' && showLogsModal) {
+      loadLogs(logsPagination.page)
+    }
+  }, [currentUser?.role, showLogsModal, logsPagination.page, logsFiltersApplied])
+
+  useEffect(() => {
+    if (showLogsModal) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
+  }, [showLogsModal])
+
+  const applyLogsFilters = () => {
+    setLogsFiltersApplied({ ...logsFilters })
+    setLogsPagination(prev => ({ ...prev, page: 1 }))
+  }
+
+  const clearLogsFilters = () => {
+    setLogsFilters({
+      search: '',
+      user: '',
+      module: '',
+      action: '',
+      dateFrom: '',
+      dateTo: ''
+    })
+    setLogsFiltersApplied({})
+    setLogsPagination(prev => ({ ...prev, page: 1 }))
+  }
+
+  const handleLogsSort = (field) => {
+    setLogsSortBy(field)
+    setLogsSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))
+  }
+
+  const sortedLogs = React.useMemo(() => {
+    if (!logs.length) return []
+    const key = logsSortBy
+    const order = logsSortOrder === 'asc' ? 1 : -1
+    return [...logs].sort((a, b) => {
+      const va = a[key] ?? ''
+      const vb = b[key] ?? ''
+      if (key === 'created_at') {
+        const da = new Date(va).getTime()
+        const db = new Date(vb).getTime()
+        return order * (da - db)
+      }
+      const sa = String(va)
+      const sb = String(vb)
+      return order * sa.localeCompare(sb, undefined, { sensitivity: 'base' })
+    })
+  }, [logs, logsSortBy, logsSortOrder])
+
+  const handleUpdate = async (e) => {
     e.preventDefault()
 
     if (!formData.newUsername || !formData.newEmail) {
@@ -228,11 +326,7 @@ function Settings() {
         return
       }
 
-      // Check password only if we have it stored
-      if (userProfile && userProfile.password && userProfile.password !== formData.currentPassword) {
-        alert('⚠️ Current password is incorrect.')
-        return
-      }
+      // Password verification will be handled by the backend
 
       if ((formData.newPassword ?? '') !== (formData.confirmPassword ?? '')) {
         alert('⚠️ New passwords do not match.')
@@ -264,28 +358,25 @@ function Settings() {
 
     showLoadingModal()
 
-    setTimeout(() => {
-      const userIndex = users.findIndex(u =>
-        (u.username && u.username.toLowerCase() === (userProfile?.username || currentUser?.username || '').toLowerCase()) ||
-        (u.email && u.email.toLowerCase() === (userProfile?.email || currentUser?.email || '').toLowerCase())
-      )
-
-      if (userIndex !== -1) {
-        // User exists in users array - update it
-        users[userIndex].username = formData.newUsername
-        users[userIndex].email = formData.newEmail
-
-        if (formData.newPassword) {
-          users[userIndex].password = formData.newPassword
-        }
-
-        localStorage.setItem('users', JSON.stringify(users))
-      } else {
-        // User doesn't exist in users array - just update session
-        console.warn('User not found in users array, updating session only')
+    try {
+      const userId = currentUser?.id || userProfile?.id
+      if (!userId) {
+        throw new Error('User ID not found')
       }
 
-      // Always update the session (currentUser)
+      const updateData = {
+        username: formData.newUsername,
+        email: formData.newEmail
+      }
+
+      if (formData.newPassword) {
+        updateData.password = formData.newPassword
+        updateData.currentPassword = formData.currentPassword
+      }
+
+      await usersAPI.update(userId, updateData)
+
+      // Update the session (currentUser)
       if (currentUser) {
         const updatedSession = {
           ...currentUser,
@@ -306,7 +397,13 @@ function Settings() {
       }
 
       showSuccessModal()
-    }, 1500)
+    } catch (error) {
+      console.error('Error updating settings:', error)
+      alert(`Error updating settings: ${error.message || 'Failed to update'}`)
+      // Remove loading modal
+      if (window.settingsOverlay) document.body.removeChild(window.settingsOverlay)
+      if (window.settingsModal) document.body.removeChild(window.settingsModal)
+    }
   }
 
   const showLoadingModal = () => {
@@ -395,8 +492,18 @@ function Settings() {
       <main className="main" style={{ minHeight: '100vh' }}>
         <header className="header">
           <h1>CPDO ZONING MANAGEMENT SYSTEM SETTINGS</h1>
-          <div className="actions">
+          <div className="actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.5rem' }}>
             <button className="btn" onClick={() => navigate(-1)}>← Back</button>
+            {currentUser?.role === 'Admin' && (
+              <button
+                type="button"
+                className="btn btn--muted"
+                onClick={() => setShowLogsModal(true)}
+                title="View activity audit trail"
+              >
+                📋 Activity Logs
+              </button>
+            )}
           </div>
         </header>
 
@@ -552,6 +659,287 @@ function Settings() {
             </button>
           </div>
         </section>
+
+        {currentUser?.role === 'Admin' && showLogsModal && (
+          <div
+            className="logs-modal-overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="logs-modal-title"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 1000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '1rem',
+              boxSizing: 'border-box'
+            }}
+            onClick={(e) => e.target === e.currentTarget && setShowLogsModal(false)}
+          >
+            <div
+              className="logs-modal-box"
+              style={{
+                background: '#fff',
+                borderRadius: '12px',
+                boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+                maxWidth: 'min(960px, 100%)',
+                width: '100%',
+                maxHeight: 'min(90vh, 800px)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden'
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                style={{
+                  padding: '1rem 1.25rem',
+                  borderBottom: '1px solid #e5e7eb',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  flexShrink: 0,
+                  background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                  color: '#fff'
+                }}
+              >
+                <h2 id="logs-modal-title" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 600 }}>
+                  📋 Activity Logs
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowLogsModal(false)}
+                  aria-label="Close"
+                  style={{
+                    background: 'rgba(255,255,255,0.15)',
+                    border: 'none',
+                    color: '#fff',
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    fontSize: '1.25rem',
+                    lineHeight: 1,
+                    padding: 0
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+              <p style={{ margin: 0, padding: '0.75rem 1.25rem', fontSize: '0.875rem', color: '#64748b', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                Read-only audit trail of create, edit, and delete actions across documents, users, and files.
+              </p>
+
+              <div style={{ padding: '1rem 1.25rem', flexShrink: 0, borderBottom: '1px solid #e5e7eb', background: '#fff' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'flex-end' }}>
+                  <input
+                    type="text"
+                    className="input"
+                    placeholder="Search user or record..."
+                    value={logsFilters.search}
+                    onChange={(e) => setLogsFilters(f => ({ ...f, search: e.target.value }))}
+                    style={{ width: 'min(180px, 100%)', padding: '0.45rem 0.6rem', fontSize: '0.875rem' }}
+                  />
+                  <select
+                    className="input"
+                    value={logsFilters.user}
+                    onChange={(e) => setLogsFilters(f => ({ ...f, user: e.target.value }))}
+                    style={{ width: 'min(140px, 100%)', padding: '0.45rem 0.6rem', fontSize: '0.875rem' }}
+                  >
+                    <option value="">All users</option>
+                    {users.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.username || u.name || u.email}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="input"
+                    value={logsFilters.module}
+                    onChange={(e) => setLogsFilters(f => ({ ...f, module: e.target.value }))}
+                    style={{ width: 'min(110px, 100%)', padding: '0.45rem 0.6rem', fontSize: '0.875rem' }}
+                  >
+                    <option value="">All modules</option>
+                    <option value="documents">Documents</option>
+                    <option value="users">Users</option>
+                    <option value="files">Files</option>
+                  </select>
+                  <select
+                    className="input"
+                    value={logsFilters.action}
+                    onChange={(e) => setLogsFilters(f => ({ ...f, action: e.target.value }))}
+                    style={{ width: 'min(100px, 100%)', padding: '0.45rem 0.6rem', fontSize: '0.875rem' }}
+                  >
+                    <option value="">All actions</option>
+                    <option value="create">Create</option>
+                    <option value="edit">Edit</option>
+                    <option value="delete">Delete</option>
+                  </select>
+                  <input
+                    type="date"
+                    className="input"
+                    value={logsFilters.dateFrom}
+                    onChange={(e) => setLogsFilters(f => ({ ...f, dateFrom: e.target.value }))}
+                    style={{ width: 'min(130px, 100%)', padding: '0.45rem 0.6rem', fontSize: '0.875rem' }}
+                    title="From date"
+                  />
+                  <input
+                    type="date"
+                    className="input"
+                    value={logsFilters.dateTo}
+                    onChange={(e) => setLogsFilters(f => ({ ...f, dateTo: e.target.value }))}
+                    style={{ width: 'min(130px, 100%)', padding: '0.45rem 0.6rem', fontSize: '0.875rem' }}
+                    title="To date"
+                  />
+                  <button type="button" className="btn btn--primary btn--small" onClick={applyLogsFilters}>
+                    Apply
+                  </button>
+                  <button type="button" className="btn btn--muted btn--small" onClick={clearLogsFilters}>
+                    Clear
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+                {logsLoading ? (
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#64748b' }}>Loading logs...</div>
+                ) : (
+                  <>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="documents-table" style={{ margin: 0 }}>
+                        <thead>
+                          <tr>
+                            <th
+                              style={{ width: '140px', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                              onClick={() => handleLogsSort('created_at')}
+                              title="Sort by timestamp"
+                            >
+                              Timestamp {logsSortBy === 'created_at' ? (logsSortOrder === 'asc' ? '↑' : '↓') : ''}
+                            </th>
+                            <th
+                              style={{ width: '120px', cursor: 'pointer', userSelect: 'none' }}
+                              onClick={() => handleLogsSort('user_name')}
+                              title="Sort by user"
+                            >
+                              User {logsSortBy === 'user_name' ? (logsSortOrder === 'asc' ? '↑' : '↓') : ''}
+                            </th>
+                            <th
+                              style={{ width: '80px', cursor: 'pointer', userSelect: 'none' }}
+                              onClick={() => handleLogsSort('action')}
+                              title="Sort by action"
+                            >
+                              Action {logsSortBy === 'action' ? (logsSortOrder === 'asc' ? '↑' : '↓') : ''}
+                            </th>
+                            <th
+                              style={{ width: '90px', cursor: 'pointer', userSelect: 'none' }}
+                              onClick={() => handleLogsSort('module')}
+                              title="Sort by module"
+                            >
+                              Module {logsSortBy === 'module' ? (logsSortOrder === 'asc' ? '↑' : '↓') : ''}
+                            </th>
+                            <th
+                              style={{ cursor: 'pointer', userSelect: 'none', minWidth: '120px' }}
+                              onClick={() => handleLogsSort('record_summary')}
+                              title="Sort by record"
+                            >
+                              Record / Resource {logsSortBy === 'record_summary' ? (logsSortOrder === 'asc' ? '↑' : '↓') : ''}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {sortedLogs.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} style={{ textAlign: 'center', padding: '1.5rem', color: '#64748b' }}>
+                                No log entries found.
+                              </td>
+                            </tr>
+                          ) : (
+                            sortedLogs.map(log => (
+                              <tr key={log.id}>
+                                <td style={{ whiteSpace: 'nowrap', fontSize: '0.8125rem' }}>
+                                  {formatDateTime(log.created_at)}
+                                </td>
+                                <td>{log.user_name || log.user_id || '—'}</td>
+                                <td>
+                                  <span
+                                    style={{
+                                      padding: '2px 6px',
+                                      borderRadius: '4px',
+                                      fontSize: '0.75rem',
+                                      fontWeight: '500',
+                                      background:
+                                        log.action === 'create'
+                                          ? '#dcfce7'
+                                          : log.action === 'edit'
+                                            ? '#dbeafe'
+                                            : '#fee2e2',
+                                      color:
+                                        log.action === 'create'
+                                          ? '#166534'
+                                          : log.action === 'edit'
+                                            ? '#1e40af'
+                                            : '#991b1b'
+                                    }}
+                                  >
+                                    {log.action}
+                                  </span>
+                                </td>
+                                <td>{log.module}</td>
+                                <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: '0.875rem' }} title={log.record_summary || ''}>
+                                  {log.record_summary || log.record_id || '—'}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                    {logsPagination.totalPages > 1 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '0.5rem',
+                          padding: '0.75rem 1rem',
+                          borderTop: '1px solid #e5e7eb',
+                          background: '#f9fafb',
+                          flexShrink: 0
+                        }}
+                      >
+                        <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                          Page {logsPagination.page} of {logsPagination.totalPages} ({logsPagination.total} total)
+                        </span>
+                        <div style={{ display: 'flex', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            className="btn btn--small btn--muted"
+                            disabled={logsPagination.page <= 1}
+                            onClick={() => setLogsPagination(p => ({ ...p, page: p.page - 1 }))}
+                          >
+                            ← Previous
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--small btn--muted"
+                            disabled={logsPagination.page >= logsPagination.totalPages}
+                            onClick={() => setLogsPagination(p => ({ ...p, page: p.page + 1 }))}
+                          >
+                            Next →
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </Layout>
   )

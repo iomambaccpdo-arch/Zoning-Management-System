@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { getCurrentUser } from '../utils/auth'
+import { usersAPI } from '../utils/api'
 
 function NewUser() {
   const navigate = useNavigate()
@@ -36,8 +37,8 @@ function NewUser() {
     setIsLoading(true)
     setModalMessage('Creating User...')
 
-    setTimeout(() => {
-      const user = {
+    try {
+      const userData = {
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
         name: `${formData.firstName.trim()} ${formData.lastName.trim()}`.trim(),
@@ -46,17 +47,18 @@ function NewUser() {
         designation: formData.designation,
         section: formData.section,
         role: formData.role,
-        password: formData.password,
-        createdAt: new Date().toISOString()
+        password: formData.password
       }
 
-      const users = JSON.parse(localStorage.getItem('users')) || []
-      users.push(user)
-      localStorage.setItem('users', JSON.stringify(users))
+      await usersAPI.create(userData)
 
       setIsLoading(false)
       setModalMessage('✅ User Created Successfully!')
-    }, 2000)
+    } catch (error) {
+      console.error('Error creating user:', error)
+      setIsLoading(false)
+      setModalMessage(`❌ Error: ${error.message || 'Failed to create user'}`)
+    }
   }
 
   const handleOk = () => {

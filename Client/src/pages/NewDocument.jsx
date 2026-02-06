@@ -1,18 +1,20 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Layout from '../components/Layout'
 import MultiSelect from '../components/MultiSelect'
 import { getCurrentUser } from '../utils/auth'
+import { documentsAPI, usersAPI } from '../utils/api'
 
 function NewDocument() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('edit')
   const fileInputRef = useRef(null)
   const zoningSelectRef = useRef(null)
   const projectTypeSelectRef = useRef(null)
 
   // Form mode: 'create' | 'edit'
-  // This prevents the "last edited document" from leaking into New Document.
-  const [mode, setMode] = useState(() => localStorage.getItem('documentFormMode') || 'create')
+  const [mode, setMode] = useState(editId ? 'edit' : 'create')
   
   const [formData, setFormData] = useState({
     title: '',
@@ -41,13 +43,7 @@ function NewDocument() {
   const [routedOptions, setRoutedOptions] = useState([])
   const [selectedFiles, setSelectedFiles] = useState([])
   const [existingFiles, setExistingFiles] = useState([])
-  const [fileNames, setFileNames] = useState('No file attached')
-  const [editIndex, setEditIndex] = useState(null)
-
-  const clearEditState = () => {
-    localStorage.removeItem('editIndex')
-    localStorage.removeItem('editDocument')
-  }
+  const [editingId, setEditingId] = useState(editId || null)
 
   const resetForm = () => {
     setFormData({
@@ -72,57 +68,50 @@ function NewDocument() {
     })
     setSelectedFiles([])
     setExistingFiles([])
-    setFileNames('No file attached')
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
   useEffect(() => {
-    // Decide behavior based on explicit mode
-    const currentMode = localStorage.getItem('documentFormMode') || 'create'
-    setMode(currentMode)
-
-    if (currentMode === 'edit') {
-      const editIdx = localStorage.getItem('editIndex')
-      const editDoc = JSON.parse(localStorage.getItem('editDocument') || 'null')
-      if (editDoc && editIdx !== null) {
-        setEditIndex(parseInt(editIdx))
-        if (editDoc.files && Array.isArray(editDoc.files) && editDoc.files.length > 0) {
-          setExistingFiles(editDoc.files)
-          displayAllFiles(editDoc.files, [])
-        } else if (editDoc.fileNames && Array.isArray(editDoc.fileNames)) {
-          const placeholderFiles = editDoc.fileNames.map(name => ({ name, type: '', data: '' }))
-          setExistingFiles(placeholderFiles)
-          displayAllFiles(placeholderFiles, [])
+    const loadEditDocument = async () => {
+      if (editId) {
+        try {
+          const editDoc = await documentsAPI.getById(editId)
+          setEditingId(editId)
+          setMode('edit')
+          
+          // Load existing files
+          if (editDoc.files && Array.isArray(editDoc.files) && editDoc.files.length > 0) {
+            // Convert API file format to form format
+            const formattedFiles = editDoc.files.map(f => ({
+              id: f.id,
+              name: f.fileName || f.file_name,
+              type: f.fileType || f.file_type,
+              data: f.fileData ? `data:${f.fileType || f.file_type};base64,${f.fileData}` : null
+            }))
+            setExistingFiles(formattedFiles)
+          }
+          
+          populateEditForm(editDoc)
+        } catch (error) {
+          console.error('Error loading document for edit:', error)
+          alert('Error loading document. Redirecting to create mode.')
+          navigate('/new-document')
         }
       } else {
-        // invalid edit state -> fall back to create
-        clearEditState()
-        localStorage.setItem('documentFormMode', 'create')
         setMode('create')
-        setEditIndex(null)
+        setEditingId(null)
         resetForm()
       }
-    } else {
-      // create mode -> always clear edit cache and reset form
-      clearEditState()
-      setEditIndex(null)
-      resetForm()
     }
 
+    loadEditDocument()
     loadZoningData()
     loadBarangayPurokData()
     loadUsers()
     setInitialDates()
-  }, [])
+  }, [editId, navigate])
 
-  useEffect(() => {
-    if (editIndex !== null) {
-      const editDoc = JSON.parse(localStorage.getItem('editDocument') || 'null')
-      if (editDoc) {
-        populateEditForm(editDoc)
-      }
-    }
-  }, [editIndex, zoningData, barangayPurokData, users])
+  // Removed - edit document is loaded in main useEffect
 
   const loadZoningData = async () => {
     try {
@@ -190,20 +179,26 @@ function NewDocument() {
     }
   }
 
-  const loadUsers = () => {
-    const allUsers = JSON.parse(localStorage.getItem('users')) || []
-    setUsers(allUsers)
-    
-    const options = allUsers
-      .filter(u => u.email)
-      .map(user => ({
-        value: user.email,
-        label: `${user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username} (${user.email})`,
-        name: user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
-        email: user.email
-      }))
-    
-    setRoutedOptions(options)
+  const loadUsers = async () => {
+    try {
+      const allUsers = await usersAPI.getAll()
+      setUsers(allUsers)
+      
+      const options = allUsers
+        .filter(u => u.email)
+        .map(user => ({
+          value: user.email,
+          label: `${user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username} (${user.email})`,
+          name: user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username,
+          email: user.email
+        }))
+      
+      setRoutedOptions(options)
+    } catch (error) {
+      console.error('Error loading users:', error)
+      setUsers([])
+      setRoutedOptions([])
+    }
   }
 
   const setInitialDates = () => {
@@ -252,36 +247,37 @@ function NewDocument() {
 
     // Parse routedTo - could be JSON string, array, or single value
     let routedToValue = []
-    if (doc.routedTo) {
-      if (typeof doc.routedTo === 'string') {
+    if (doc.routed_to || doc.routedTo) {
+      const routedTo = doc.routed_to || doc.routedTo
+      if (typeof routedTo === 'string') {
         try {
-          const parsed = JSON.parse(doc.routedTo)
+          const parsed = JSON.parse(routedTo)
           routedToValue = Array.isArray(parsed) ? parsed : [parsed]
         } catch (e) {
-          routedToValue = [doc.routedTo]
+          routedToValue = [routedTo]
         }
-      } else if (Array.isArray(doc.routedTo)) {
-        routedToValue = doc.routedTo
+      } else if (Array.isArray(routedTo)) {
+        routedToValue = routedTo
       } else {
-        routedToValue = [doc.routedTo]
+        routedToValue = [routedTo]
       }
     }
 
     setFormData({
       title: doc.title || '',
       zoning: doc.zoning || '',
-      znApplication: doc.znApp || '',
-      projectType: doc.projectType || '',
-      dateOfApplication: doc.dateOfApp || fallbackDate,
-      dueDate: doc.dueDate || fallbackDue,
-      receivedBy: doc.receivedBy || '',
-      assistedBy: doc.assistedBy || '',
-      applicantName: doc.applicantName || '',
+      znApplication: doc.zn_app || doc.znApp || '',
+      projectType: doc.project_type || doc.projectType || '',
+      dateOfApplication: doc.date_of_app || doc.dateOfApp || fallbackDate,
+      dueDate: doc.due_date || doc.dueDate || fallbackDue,
+      receivedBy: doc.received_by || doc.receivedBy || '',
+      assistedBy: doc.assisted_by || doc.assistedBy || '',
+      applicantName: doc.applicant_name || doc.applicantName || '',
       routedTo: routedToValue,
-      floorArea: doc.floorArea || '',
-      barangay: doc.location ? doc.location.split(',')[0]?.trim() : '',
-      purok: doc.location ? doc.location.split(',')[1]?.trim() : '',
-      lotArea: doc.lotArea || '',
+      floorArea: doc.floor_area || doc.floorArea || '',
+      barangay: doc.barangay || (doc.location ? doc.location.split(',')[0]?.trim() : ''),
+      purok: doc.purok || (doc.location ? doc.location.split(',')[1]?.trim() : ''),
+      lotArea: doc.lot_area || doc.lotArea || '',
       storey: doc.storey || '',
       landmark: doc.landmark || '',
       mezanine: doc.mezanine || '',
@@ -297,6 +293,7 @@ function NewDocument() {
   }
 
   const processFiles = (files) => {
+    if (!files.length) return
     const filesWithData = []
     let processed = 0
 
@@ -306,16 +303,28 @@ function NewDocument() {
         filesWithData[idx] = {
           name: file.name,
           type: file.type,
+          size: file.size,
           data: e.target.result
         }
         processed++
         if (processed === files.length) {
-          setSelectedFiles(filesWithData)
-          displayAllFiles(existingFiles, filesWithData)
+          setSelectedFiles(prev => [...prev, ...filesWithData])
+          if (fileInputRef.current) fileInputRef.current.value = ''
         }
       }
       reader.readAsDataURL(file)
     })
+  }
+
+  const removeNewFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const removeExistingFile = (index) => {
+    const file = existingFiles[index]
+    const name = file?.name || file?.fileName || 'this file'
+    if (!window.confirm(`Remove "${name}" from the document? It will be permanently deleted when you save.`)) return
+    setExistingFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleDragOver = (e) => {
@@ -341,39 +350,6 @@ function NewDocument() {
     }
   }
 
-  const displayAllFiles = (existing, selected) => {
-    const existingNames = existing.map(f => f.name || f)
-    const selectedNames = selected.map(f => f.name || f)
-    const allNames = [...existingNames, ...selectedNames]
-
-    if (allNames.length === 0) {
-      setFileNames('No file attached')
-      return
-    }
-
-    if (allNames.length === 1) {
-      const isExisting = existingNames.includes(allNames[0])
-      setFileNames(`${isExisting ? '📎' : '📄'} ${allNames[0]}${isExisting ? ' <span style="color:#6b7280;font-size:0.85em;">(existing)</span>' : ''}`)
-    } else {
-      let html = `📂 ${allNames.length} files:<br>`
-      if (existingNames.length > 0) {
-        html += '<div style="margin-top:4px;color:#6b7280;font-size:0.9em;">Existing files:</div>'
-        existingNames.forEach(name => {
-          html += `• 📎 ${name}<br>`
-        })
-      }
-      if (selectedNames.length > 0) {
-        if (existingNames.length > 0) {
-          html += '<div style="margin-top:4px;color:#16a34a;font-size:0.9em;">New files:</div>'
-        }
-        selectedNames.forEach(name => {
-          html += `• 📄 ${name}<br>`
-        })
-      }
-      setFileNames(html)
-    }
-  }
-
   const handleSubmit = async (e) => {
     e.preventDefault()
 
@@ -388,21 +364,60 @@ function NewDocument() {
       return
     }
 
-    // Wait for files to be processed
+    // Prepare files for API (convert to base64)
+    // Only include new files - existing files are already in the database
+    // The backend will handle keeping existing files when we don't send files array
+    // But since backend deletes all files and re-inserts, we need to include all files
     const allFiles = [...existingFiles, ...selectedFiles]
-    const allFileNames = allFiles.map(f => f.name || f)
+    const filesForAPI = await Promise.all(allFiles.map(async (f) => {
+      // If file already has base64 data, extract it
+      if (f.data && f.data.startsWith('data:')) {
+        const base64 = f.data.split(',')[1]
+        return {
+          name: f.name,
+          type: f.type,
+          size: f.size || 0,
+          data: base64
+        }
+      } else if (f.data && typeof f.data === 'string') {
+        // Already base64 string
+        return {
+          name: f.name,
+          type: f.type,
+          size: f.size || 0,
+          data: f.data
+        }
+      } else if (f.id) {
+        // Existing file - fetch its data from API
+        try {
+          const { filesAPI } = await import('../utils/api')
+          const fileData = await filesAPI.getById(f.id)
+          return {
+            name: fileData.fileName,
+            type: fileData.fileType,
+            size: fileData.fileSize || 0,
+            data: fileData.fileData
+          }
+        } catch (error) {
+          console.error('Error fetching existing file data:', error)
+          // Fallback: return file info without data (backend might handle this)
+          return {
+            name: f.name,
+            type: f.type,
+            size: f.size || 0
+          }
+        }
+      } else {
+        // No data available
+        return {
+          name: f.name,
+          type: f.type,
+          size: f.size || 0
+        }
+      }
+    }))
 
-    const now = new Date()
-    let docs = JSON.parse(localStorage.getItem('documents')) || []
-    const originalDoc = editIndex !== null ? docs[editIndex] : null
-    
-    const newDoc = {
-      dateAdded: now.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      }),
-      dateSort: originalDoc?.dateSort || now.toISOString(),
+    const documentData = {
       title: formData.title,
       projectType: formData.projectType,
       znApp: formData.znApplication,
@@ -412,39 +427,31 @@ function NewDocument() {
       receivedBy: formData.receivedBy,
       assistedBy: formData.assistedBy,
       applicantName: formData.applicantName,
-      routedTo: JSON.stringify(formData.routedTo),
+      routedTo: formData.routedTo,
       location: `${formData.barangay}, ${formData.purok}`,
+      barangay: formData.barangay,
+      purok: formData.purok,
       floorArea: formData.floorArea,
       lotArea: formData.lotArea,
       storey: formData.storey,
       mezanine: formData.mezanine,
       oic: formData.oic,
       landmark: formData.landmark,
-      fileNames: allFileNames,
-      files: allFiles
+      files: filesForAPI
     }
 
-    if (editIndex !== null) {
-      docs[editIndex] = newDoc
-      localStorage.removeItem('editIndex')
-      localStorage.removeItem('editDocument')
-    } else {
-      docs.unshift(newDoc)
+    try {
+      if (editingId) {
+        await documentsAPI.update(editingId, documentData)
+      } else {
+        await documentsAPI.create(documentData)
+      }
+      alert('✅ Document successfully saved!')
+      navigate('/documents')
+    } catch (error) {
+      console.error('Error saving document:', error)
+      alert(`Error saving document: ${error.message || 'Failed to save'}`)
     }
-
-    // After save, always return to create mode
-    localStorage.setItem('documentFormMode', 'create')
-
-    docs.sort((a, b) => {
-      const dateA = a.dateSort ? new Date(a.dateSort) : new Date(a.dateAdded || a.dateCreated || 0)
-      const dateB = b.dateSort ? new Date(b.dateSort) : new Date(b.dateAdded || b.dateCreated || 0)
-      return dateB - dateA
-    })
-
-    localStorage.setItem('documents', JSON.stringify(docs))
-    localStorage.removeItem('latestUploadFiles')
-    alert('✅ Document successfully saved!')
-    navigate('/documents')
   }
 
   const handleTitleChange = (e) => {
@@ -481,16 +488,16 @@ function NewDocument() {
     return a.localeCompare(b)
   }) : []
 
-  const names = users.map(u => u.name).filter(Boolean)
+  const names = users.map(u => u.name || `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username).filter(Boolean)
 
   return (
     <Layout>
       <main className="main">
         <header className="header">
-          <h1>Create New Document</h1>
-          <div className="actions" id="uploadArea" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
+          <h1>{mode === 'edit' ? 'Edit Document' : 'Create New Document'}</h1>
+          <div className="actions document-upload-area" id="uploadArea" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
             <label htmlFor="fileInput" className="btn btn--success" style={{ cursor: 'pointer' }}>
-              ⬆️ Upload
+              ⬆️ Upload files
             </label>
             <input
               ref={fileInputRef}
@@ -500,7 +507,23 @@ function NewDocument() {
               multiple
               onChange={handleFileChange}
             />
-            <span className="muted" id="fileName" dangerouslySetInnerHTML={{ __html: fileNames }}></span>
+            <div className="document-file-list">
+              {existingFiles.length === 0 && selectedFiles.length === 0 && (
+                <span className="document-file-list-empty">No file attached. Upload one or more files.</span>
+              )}
+              {existingFiles.map((f, i) => (
+                <div key={f.id ? `ex-${f.id}` : `ex-${i}-${f.name}`} className="document-file-item document-file-item--existing">
+                  <span className="document-file-item-name" title={f.name}>📎 {f.name}</span>
+                  <button type="button" className="document-file-item-remove" onClick={() => removeExistingFile(i)} title="Remove file" aria-label="Remove file">×</button>
+                </div>
+              ))}
+              {selectedFiles.map((f, i) => (
+                <div key={`new-${i}-${f.name}`} className="document-file-item document-file-item--new">
+                  <span className="document-file-item-name" title={f.name}>📄 {f.name}</span>
+                  <button type="button" className="document-file-item-remove" onClick={() => removeNewFile(i)} title="Remove file" aria-label="Remove file">×</button>
+                </div>
+              ))}
+            </div>
           </div>
         </header>
 

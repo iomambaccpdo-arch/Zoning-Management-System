@@ -1,44 +1,49 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
-import { getCurrentUser } from '../utils/auth'
+import { usersAPI } from '../utils/api'
 
 function Accounts() {
   const navigate = useNavigate()
   const [users, setUsers] = useState([])
-  const [editingIndex, setEditingIndex] = useState(null)
+  const [editingUserId, setEditingUserId] = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showSuccessPopup, setShowSuccessPopup] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [editForm, setEditForm] = useState({
     name: '',
-    username: '',
-    email: '',
-    password: '',
     designation: '',
     section: '',
     role: ''
   })
-  const [showPassword, setShowPassword] = useState(false)
 
   useEffect(() => {
     loadUsers()
   }, [])
 
-  const loadUsers = () => {
-    const allUsers = JSON.parse(localStorage.getItem('users')) || []
-    setUsers(allUsers)
+  const loadUsers = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const allUsers = await usersAPI.getAll()
+      setUsers(allUsers)
+    } catch (err) {
+      console.error('Error loading users:', err)
+      setError(err.message || 'Failed to load users')
+      setUsers([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleEdit = (index) => {
     const user = users[index]
     if (!user) return
-    
-    setEditingIndex(index)
+
+    setEditingUserId(user.id)
     setEditForm({
-      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || '',
-      username: user.username || '',
-      email: user.email || '',
-      password: '',
+      name: `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.name || '',
       designation: user.designation || '',
       section: user.section || '',
       role: user.role || 'User'
@@ -46,50 +51,49 @@ function Accounts() {
     setShowEditModal(true)
   }
 
-  const handleDelete = (index) => {
+  const handleDelete = async (index) => {
     const user = users[index]
     if (!user) return
-    
-    if (window.confirm(`Delete user ${user.firstName} ${user.lastName}?`)) {
-      const updatedUsers = [...users]
-      updatedUsers.splice(index, 1)
-      localStorage.setItem('users', JSON.stringify(updatedUsers))
-      loadUsers()
+
+    const displayName = `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || 'this user'
+    if (!window.confirm(`Delete user ${displayName}?`)) return
+
+    try {
+      await usersAPI.delete(user.id)
+      await loadUsers()
+    } catch (err) {
+      console.error('Error deleting user:', err)
+      alert(`Error deleting user: ${err.message || 'Failed to delete'}`)
     }
   }
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault()
-    if (editingIndex === null) return
+    if (editingUserId == null) return
 
     const fullName = editForm.name.trim()
     const [firstName, ...rest] = fullName.split(' ')
     const lastName = rest.join(' ')
 
-    const updatedUsers = [...users]
-    updatedUsers[editingIndex] = {
-      ...updatedUsers[editingIndex],
-      firstName: firstName || '',
-      lastName: lastName || '',
-      name: fullName,
-      username: editForm.username.trim(),
-      email: editForm.email.trim(),
-      role: editForm.role,
-      designation: editForm.designation,
-      section: editForm.section
+    try {
+      await usersAPI.update(editingUserId, {
+        firstName: firstName || '',
+        lastName: lastName || '',
+        name: fullName,
+        role: editForm.role,
+        designation: editForm.designation,
+        section: editForm.section
+      })
+      setShowEditModal(false)
+      setEditingUserId(null)
+      setEditForm({ name: '', designation: '', section: '', role: '' })
+      setShowSuccessPopup(true)
+      setTimeout(() => setShowSuccessPopup(false), 2000)
+      await loadUsers()
+    } catch (err) {
+      console.error('Error updating user:', err)
+      alert(`Error updating user: ${err.message || 'Failed to update'}`)
     }
-
-    if (editForm.password.trim()) {
-      updatedUsers[editingIndex].password = editForm.password.trim()
-    }
-
-    localStorage.setItem('users', JSON.stringify(updatedUsers))
-    setShowEditModal(false)
-    setEditingIndex(null)
-    setEditForm({ name: '', username: '', email: '', password: '', designation: '', section: '', role: '' })
-    setShowSuccessPopup(true)
-    setTimeout(() => setShowSuccessPopup(false), 2000)
-    loadUsers()
   }
 
   return (
@@ -104,43 +108,52 @@ function Accounts() {
         </header>
 
         <section className="section">
-          <table className="table-basic">
-            <thead>
-              <tr>
-                <th>ID</th>
-                <th>Name</th>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Designation</th>
-                <th>Section</th>
-                <th>Role</th>
-                <th style={{ width: '160px' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="accountsTableBody">
-              {users.length === 0 ? (
+          {error && (
+            <div style={{ padding: '1em', marginBottom: '1em', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#991b1b' }}>
+              {error}
+            </div>
+          )}
+          {loading ? (
+            <div style={{ padding: '2em', textAlign: 'center', color: '#64748b' }}>Loading users...</div>
+          ) : (
+            <table className="table-basic">
+              <thead>
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', color: 'gray' }}>No users found</td>
+                  <th>ID</th>
+                  <th>Name</th>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Designation</th>
+                  <th>Section</th>
+                  <th>Role</th>
+                  <th style={{ width: '160px' }}>Actions</th>
                 </tr>
-              ) : (
-                users.map((user, index) => (
-                  <tr key={index}>
-                    <td>{index + 1}</td>
-                    <td>{user.firstName} {user.lastName}</td>
-                    <td>{user.username}</td>
-                    <td>{user.email}</td>
-                    <td>{user.designation}</td>
-                    <td>{user.section}</td>
-                    <td>{user.role}</td>
-                    <td>
-                      <button className="btn btn--small btn--primary edit-btn" onClick={() => handleEdit(index)}>Edit</button>
-                      <button className="btn btn--small btn--danger delete-btn" onClick={() => handleDelete(index)}>Delete</button>
-                    </td>
+              </thead>
+              <tbody id="accountsTableBody">
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign: 'center', color: 'gray' }}>No users found</td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  users.map((user, index) => (
+                    <tr key={user.id || index}>
+                      <td>{index + 1}</td>
+                      <td>{user.first_name || ''} {user.last_name || ''}</td>
+                      <td>{user.username}</td>
+                      <td>{user.email}</td>
+                      <td>{user.designation}</td>
+                      <td>{user.section}</td>
+                      <td>{user.role}</td>
+                      <td>
+                        <button className="btn btn--small btn--primary edit-btn" onClick={() => handleEdit(index)}>Edit</button>
+                        <button className="btn btn--small btn--danger delete-btn" onClick={() => handleDelete(index)}>Delete</button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          )}
         </section>
 
         {/* Edit Modal */}
@@ -148,6 +161,9 @@ function Accounts() {
           <div className="modal" id="editModal" style={{ display: 'flex' }}>
             <div className="modal__content">
               <h2>Edit User</h2>
+              <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1rem' }}>
+                Username, email, and password are managed in Settings or via a dedicated admin workflow.
+              </p>
               <form id="editForm" onSubmit={handleEditSubmit}>
                 <label htmlFor="editName">Name</label>
                 <input
@@ -157,44 +173,6 @@ function Accounts() {
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
                 />
-
-                <label htmlFor="editUsername">Username</label>
-                <input
-                  type="text"
-                  id="editUsername"
-                  required
-                  value={editForm.username}
-                  onChange={(e) => setEditForm({ ...editForm, username: e.target.value })}
-                />
-
-                <label htmlFor="editEmail">Email</label>
-                <input
-                  type="email"
-                  id="editEmail"
-                  required
-                  value={editForm.email}
-                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                />
-
-                <label htmlFor="editPassword">Password</label>
-                <div className="password-wrapper">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    id="editPassword"
-                    placeholder="Enter new password"
-                    value={editForm.password}
-                    onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                  />
-                  <span
-                    className="toggle-eye"
-                    onClick={() => setShowPassword(!showPassword)}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? '🙈' : '👁️'}
-                  </span>
-                </div>
 
                 <label htmlFor="editDesignation">Designation</label>
                 <select

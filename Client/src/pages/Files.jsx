@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import Layout from '../components/Layout'
 import { getCurrentUser } from '../utils/auth'
+import { documentsAPI, filesAPI } from '../utils/api'
+import { formatDateTime } from '../utils/dateFormat'
 
 function Files() {
   const navigate = useNavigate()
@@ -19,31 +21,37 @@ function Files() {
     filterFiles()
   }, [files, searchQuery, selectedYear])
 
-  const loadFiles = () => {
-    let docs = JSON.parse(localStorage.getItem('documents')) || []
-    docs.sort((a, b) => {
-      const dateA = a.dateSort ? new Date(a.dateSort) : new Date(a.dateAdded || a.dateCreated || 0)
-      const dateB = b.dateSort ? new Date(b.dateSort) : new Date(b.dateAdded || b.dateCreated || 0)
-      return dateB - dateA
-    })
+  const loadFiles = async () => {
+    try {
+      const docs = await documentsAPI.getAll()
+      docs.sort((a, b) => {
+        const dateA = a.date_sort ? new Date(a.date_sort) : new Date(a.date_added || 0)
+        const dateB = b.date_sort ? new Date(b.date_sort) : new Date(b.date_added || 0)
+        return dateB - dateA
+      })
 
-    let allFiles = []
-    docs.forEach((doc, docIdx) => {
-      if (!doc.fileNames || !Array.isArray(doc.fileNames) || doc.fileNames.length === 0) return
-      const date = doc.dateAdded || doc.dateCreated || ''
-      doc.fileNames.forEach((fileName, fileIdx) => {
-        allFiles.push({
-          fileName,
-          docIdx,
-          fileIdx,
-          docTitle: doc.title || 'Untitled',
-          date,
-          doc
+      let allFiles = []
+      docs.forEach((doc, docIdx) => {
+        if (!doc.files || !Array.isArray(doc.files) || doc.files.length === 0) return
+        const date = formatDateTime(doc.date_added || doc.dateAdded)
+        doc.files.forEach((file, fileIdx) => {
+          allFiles.push({
+            fileName: file.fileName || file.file_name,
+            docIdx,
+            fileIdx,
+            docTitle: doc.title || 'Untitled',
+            date,
+            doc,
+            fileId: file.id
+          })
         })
       })
-    })
 
-    setFiles(allFiles)
+      setFiles(allFiles)
+    } catch (error) {
+      console.error('Error loading files:', error)
+      setFiles([])
+    }
   }
 
   const filterFiles = () => {
@@ -52,7 +60,7 @@ function Files() {
         f.fileName.toLowerCase().includes(searchQuery.toLowerCase()) || 
         f.docTitle.toLowerCase().includes(searchQuery.toLowerCase())
       
-      const dateToCheck = f.doc.dateSort ? new Date(f.doc.dateSort) : new Date(f.date)
+      const dateToCheck = f.doc.date_sort ? new Date(f.doc.date_sort) : new Date(f.doc.date_added || f.date)
       const fileYear = dateToCheck.getFullYear()
       const matchesYear = !selectedYear || (fileYear === parseInt(selectedYear))
       
@@ -62,39 +70,18 @@ function Files() {
     setFilteredFiles(filtered)
   }
 
-  const handleDownload = (docIdx, fileIdx) => {
-    const docs = JSON.parse(localStorage.getItem('documents')) || []
-    const doc = docs[docIdx]
-    if (!doc || !doc.fileNames || !doc.fileNames[fileIdx]) return
-    
-    const fileName = doc.fileNames[fileIdx]
-    let fileObj = null
-    if (doc.files && Array.isArray(doc.files) && doc.files[fileIdx]) {
-      fileObj = doc.files[fileIdx]
-    } else if (doc.files && Array.isArray(doc.files)) {
-      fileObj = doc.files.find(f => f.name === fileName)
+  const handleDownload = async (docIdx, fileIdx) => {
+    const file = filteredFiles.find(f => f.docIdx === docIdx && f.fileIdx === fileIdx)
+    if (!file || !file.fileId) {
+      alert('File not found')
+      return
     }
 
-    if (fileObj && fileObj.data) {
-      fetch(fileObj.data)
-        .then(res => res.blob())
-        .then(blob => {
-          const url = URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = fileName
-          document.body.appendChild(a)
-          a.click()
-          setTimeout(() => {
-            document.body.removeChild(a)
-            URL.revokeObjectURL(url)
-          }, 100)
-        })
-        .catch(() => {
-          downloadPlaceholder(fileName)
-        })
-    } else {
-      downloadPlaceholder(fileName)
+    try {
+      await filesAPI.download(file.fileId)
+    } catch (error) {
+      console.error('Error downloading file:', error)
+      alert(`Error downloading file: ${error.message || 'Failed to download'}`)
     }
   }
 
@@ -112,64 +99,80 @@ function Files() {
     }, 100)
   }
 
-  const handleDelete = (docIdx, fileIdx) => {
-    if (!window.confirm('Are you sure you want to delete this file?')) return
-    
-    const docs = JSON.parse(localStorage.getItem('documents')) || []
-    const doc = docs[docIdx]
-    if (!doc || !doc.fileNames || !doc.fileNames[fileIdx]) return
-    
-    doc.fileNames.splice(fileIdx, 1)
-    if (doc.files && Array.isArray(doc.files)) {
-      doc.files.splice(fileIdx, 1)
+  const handleDelete = async (docIdx, fileIdx) => {
+    const file = filteredFiles.find(f => f.docIdx === docIdx && f.fileIdx === fileIdx)
+    if (!file || !file.fileId) {
+      alert('File not found')
+      return
     }
-    
-    localStorage.setItem('documents', JSON.stringify(docs))
-    loadFiles()
+    if (!window.confirm(`Remove "${file.fileName}" from this document? This cannot be undone.`)) return
+
+    try {
+      await filesAPI.delete(file.fileId)
+      await loadFiles()
+    } catch (error) {
+      console.error('Error deleting file:', error)
+      alert(`Error deleting file: ${error.message || 'Failed to delete'}`)
+    }
   }
 
-  const viewFile = (docIdx, fileIdx) => {
-    const docs = JSON.parse(localStorage.getItem('documents')) || []
-    const doc = docs[docIdx]
-    if (!doc || !doc.fileNames || !doc.fileNames[fileIdx]) return
-    
-    const fileName = doc.fileNames[fileIdx]
-    let fileObj = (doc.files && Array.isArray(doc.files)) ? doc.files.find(f => f.name === fileName) : null
-    
-    if (fileObj && fileObj.data && fileObj.type) {
-      if (fileObj.type.startsWith('text/')) {
-        fetch(fileObj.data)
-          .then(res => res.text())
-          .then(text => showFileModal(fileName, text))
-          .catch(() => showFileModal(fileName, '[Could not preview text file]'))
-      } else if (fileObj.type.startsWith('image/')) {
-        const content = `<img src="${fileObj.data}" alt="${fileName}" style="max-width:100%;max-height:40vh;display:block;margin:auto;" />`
-        showFileModal(fileName, content)
-      } else if (fileObj.type === 'application/pdf') {
-        const content = `<embed src="${fileObj.data}" type="application/pdf" width="100%" height="400px" style="border-radius:0.5em;box-shadow:0 1px 8px #0001;" />` +
-          `<div style="margin-top:1em;"><a href="${fileObj.data}" download="${fileName}" class="btn btn--primary">Download PDF</a></div>`
-        showFileModal(fileName, content)
+  const viewFile = async (docIdx, fileIdx) => {
+    const file = filteredFiles.find(f => f.docIdx === docIdx && f.fileIdx === fileIdx)
+    if (!file || !file.fileId) {
+      alert('File not found')
+      return
+    }
+
+    try {
+      const fileData = await filesAPI.getById(file.fileId)
+      const fileName = fileData.fileName
+      const fileType = fileData.fileType
+      const dataUrl = fileData.fileData ? `data:${fileType};base64,${fileData.fileData}` : null
+
+      const documentTitle = file.docTitle || file.doc?.title || null
+      if (dataUrl) {
+        if (fileType?.startsWith('text/')) {
+          try {
+            const text = atob(fileData.fileData)
+            showFileModal(fileName, text, documentTitle)
+          } catch {
+            showFileModal(fileName, '[Could not preview text file]', documentTitle)
+          }
+        } else if (fileType?.startsWith('image/')) {
+          const content = `<img src="${dataUrl}" alt="${fileName}" style="max-width:100%;max-height:40vh;display:block;margin:auto;" />`
+          showFileModal(fileName, content, documentTitle)
+        } else if (fileType === 'application/pdf') {
+          const content = `<embed src="${dataUrl}" type="application/pdf" width="100%" height="400px" style="border-radius:0.5em;box-shadow:0 1px 8px #0001;" />` +
+            `<div style="margin-top:1em;"><a href="${dataUrl}" download="${fileName}" class="btn btn--primary">Download PDF</a></div>`
+          showFileModal(fileName, content, documentTitle)
+        } else {
+          const content = `<a href="${dataUrl}" download="${fileName}" class="btn btn--primary" style="margin:1em auto;display:block;width:max-content;">Download file</a><br><span style="color:#888;">Preview not supported for this file type.</span>`
+          showFileModal(fileName, content, documentTitle)
+        }
       } else {
-        const content = `<a href="${fileObj.data}" download="${fileName}" class="btn btn--primary" style="margin:1em auto;display:block;width:max-content;">Download file</a><br><span style="color:#888;">Preview not supported for this file type.</span>`
-        showFileModal(fileName, content)
+        const content = `This is a placeholder preview for file: ${fileName}\n\n(No file data found)`
+        showFileModal(fileName, content, documentTitle)
       }
-    } else {
-      const content = `This is a placeholder preview for file: ${fileName}\n\n(No file data found)`
-      showFileModal(fileName, content)
+    } catch (error) {
+      console.error('Error loading file:', error)
+      showFileModal(file.fileName, `Error loading file: ${error.message}`, file.docTitle || null)
     }
   }
 
-  const showFileModal = (title, content) => {
+  const showFileModal = (fileTitle, content, documentTitle = null) => {
     let modal = document.getElementById('fileViewModal')
     if (!modal) {
       modal = document.createElement('div')
       modal.id = 'fileViewModal'
       modal.style.cssText = 'display:none;position:fixed;left:0;top:0;width:100vw;height:100vh;background:rgba(0,0,0,0.35);z-index:1000;'
       modal.innerHTML = `
-        <div style="background:#fff;max-width:520px;margin:7vh auto;padding:2em 2em 1.5em 2em;border-radius:1em;box-shadow:0 2px 16px #0002;position:relative;">
-          <button id="closeFileModalBtn" style="position:absolute;top:1em;right:1em;font-size:1.2em;background:none;border:none;cursor:pointer;">✖</button>
-          <h2 id="fileModalTitle" style="margin-top:0;font-size:1.2em;"></h2>
-          <div id="fileModalContent" style="margin:1em 0 0 0;white-space:pre-wrap;max-height:45vh;overflow:auto;font-family:monospace;font-size:1em;background:#f8fafc;padding:1em;border-radius:0.5em;"></div>
+        <div class="file-preview-modal__box" style="background:#fff;max-width:560px;margin:7vh auto;padding:0;border-radius:12px;box-shadow:0 20px 40px rgba(0,0,0,0.15);position:relative;overflow:hidden;">
+          <div class="file-preview-modal__header" style="background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);padding:20px 48px 20px 24px;">
+            <button id="closeFileModalBtn" style="position:absolute;top:16px;right:16px;font-size:22px;background:rgba(255,255,255,0.15);border:none;cursor:pointer;color:#fff;width:36px;height:36px;border-radius:8px;line-height:1;padding:0;">✖</button>
+            <h2 id="fileModalTitle" style="margin:0;font-size:1.25rem;font-weight:600;color:#fff;word-break:break-word;line-height:1.3;"></h2>
+            <div id="fileModalDocTitle" style="margin-top:6px;font-size:0.875rem;color:rgba(255,255,255,0.8);display:none;"></div>
+          </div>
+          <div id="fileModalContent" style="margin:0;padding:1.25em;white-space:pre-wrap;max-height:50vh;overflow:auto;font-family:monospace;font-size:0.9375rem;background:#f8fafc;"></div>
         </div>
       `
       document.body.appendChild(modal)
@@ -182,7 +185,15 @@ function Files() {
       })
     }
 
-    document.getElementById('fileModalTitle').textContent = title
+    document.getElementById('fileModalTitle').textContent = fileTitle || 'File preview'
+    const docTitleEl = document.getElementById('fileModalDocTitle')
+    if (documentTitle) {
+      docTitleEl.textContent = `From document: ${documentTitle}`
+      docTitleEl.style.display = 'block'
+    } else {
+      docTitleEl.textContent = ''
+      docTitleEl.style.display = 'none'
+    }
     const contentDiv = document.getElementById('fileModalContent')
     if (/<(img|a|br|span|div|p|strong|em|b|i|h[1-6])\b/i.test(content)) {
       contentDiv.innerHTML = content
@@ -193,7 +204,7 @@ function Files() {
   }
 
   const years = Array.from(new Set(files.map(f => {
-    const dateToCheck = f.doc.dateSort ? new Date(f.doc.dateSort) : new Date(f.date)
+    const dateToCheck = f.doc.date_sort ? new Date(f.doc.date_sort) : new Date(f.doc.date_added || f.date)
     return dateToCheck.getFullYear()
   }).filter(y => y > 1970 && !isNaN(y)))).sort((a, b) => b - a)
 
@@ -210,11 +221,6 @@ function Files() {
               <Link
                 className="btn btn--primary"
                 to="/new-document"
-                onClick={() => {
-                  localStorage.setItem('documentFormMode', 'create')
-                  localStorage.removeItem('editIndex')
-                  localStorage.removeItem('editDocument')
-                }}
               >
                 ➕ Create New
               </Link>
@@ -261,7 +267,7 @@ function Files() {
             ) : (
               filteredFiles.map((f, idx) => (
                 <div
-                  key={idx}
+                  key={f.fileId || idx}
                   className="filecard"
                   tabIndex={0}
                   style={{ cursor: 'pointer' }}
@@ -294,9 +300,19 @@ function Files() {
                       </button>
                     )}
                   </div>
-                  <Link
+                    <Link
                     className="filecard__link"
-                    to={`/documents?doc=${f.docIdx}`}
+                    to={(() => {
+                      const d = f.doc.date_sort || f.doc.date_added
+                      const monthKey = d ? (() => {
+                        const date = new Date(d)
+                        return isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+                      })() : ''
+                      const params = new URLSearchParams()
+                      if (monthKey) params.set('month', monthKey)
+                      params.set('doc', String(f.doc.id))
+                      return `/documents?${params.toString()}`
+                    })()}
                     onClick={(e) => e.stopPropagation()}
                   >
                     → View Document

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { isLoggedIn } from '../utils/auth'
+import { authAPI } from '../utils/api'
 
 function Login() {
   const navigate = useNavigate()
@@ -27,37 +28,13 @@ function Login() {
     await new Promise(resolve => setTimeout(resolve, 300))
 
     try {
-      // Get users from localStorage
-      const users = JSON.parse(localStorage.getItem('users')) || []
+      // Call API to login
+      const response = await authAPI.login(username, password)
 
-      // Find user by username or email
-      const user = users.find(u => 
-        (u.username && u.username.toLowerCase() === username.toLowerCase()) ||
-        (u.email && u.email.toLowerCase() === username.toLowerCase())
-      )
-
-      // Validate credentials
-      if (!user) {
-        setIsLoading(false)
-        setErrorMessage('Invalid username or email.')
-        return
-      }
-
-      if (!user.password || user.password !== password) {
-        setIsLoading(false)
-        setErrorMessage('Invalid password.')
-        return
-      }
-
-      // Login successful
+      // Login successful - store user session with token
       const userSession = {
-        id: user.username,
-        name: user.name || `${user.firstName} ${user.lastName}`,
-        username: user.username,
-        email: user.email,
-        role: user.role,
-        designation: user.designation,
-        section: user.section,
+        ...response.user,
+        token: response.token,
         loginTime: new Date().toISOString()
       }
 
@@ -74,7 +51,7 @@ function Login() {
     } catch (error) {
       console.error('Login error:', error)
       setIsLoading(false)
-      setErrorMessage('An error occurred. Please try again.')
+      setErrorMessage(error.message || 'An error occurred. Please try again.')
     }
   }
 

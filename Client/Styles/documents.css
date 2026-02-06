@@ -26,6 +26,17 @@
       background-color: #f1f5f9;
     }
 
+    .documents-table tbody tr {
+      transition: background-color 0.6s ease, box-shadow 0.6s ease;
+    }
+
+    /* Temporary highlight for document opened via "View Document" redirect; fades out when class is removed */
+    .doc-row-highlight {
+      background-color: rgba(59, 130, 246, 0.14) !important;
+      box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.45);
+      transition: background-color 0.6s ease, box-shadow 0.6s ease;
+    }
+
     .main {
       padding: 24px;
     }
@@ -37,17 +48,15 @@
       margin-bottom: 24px;
     }
 
-    /* Table scroll container */
+    /* Table scroll container – vertical scroll only, no horizontal */
     .table-container {
       width: 100%;
-      overflow: auto; /* allow horizontal and vertical scrolling */
-      max-height: calc(100vh - 180px); /* leave space for header and margins */
+      overflow-x: hidden;
+      overflow-y: auto;
+      max-height: calc(100vh - 180px);
       border-radius: 8px;
       -webkit-overflow-scrolling: touch;
-      cursor: grab; /* hint draggable */
     }
-
-    .table-container:active { cursor: grabbing; }
 
     /* Keep the table header visible when vertically scrolling */
     .table-container thead th {
@@ -56,9 +65,63 @@
       z-index: 20;
     }
 
-    /* Ensure horizontal scrolling doesn't hide sidebar/header
-       (header is sticky within main, sidebar is fixed) */
-    table { min-width: 1200px; }
+    /* Documents table: fit viewport, no horizontal scroll */
+    .documents-table {
+      width: 100%;
+      table-layout: fixed;
+      min-width: 0;
+    }
+
+    .documents-table .doc-col-date { width: 11%; }
+    .documents-table .doc-col-title { width: 22%; }
+    .documents-table .doc-col-type { width: 12%; }
+    .documents-table .doc-col-zn { width: 10%; }
+    .documents-table .doc-col-due { width: 10%; }
+    .documents-table .doc-col-applicant { width: 17%; }
+    .documents-table .doc-col-location { width: 12%; }
+    .documents-table .doc-col-actions { width: 16%; }
+
+    .documents-empty {
+      text-align: center;
+      color: #64748b;
+      padding: 2em 16px !important;
+    }
+
+    .doc-cell-truncate {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+
+    .doc-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .documents-hint {
+      margin: 12px 0 0;
+      font-size: 0.875rem;
+      color: #64748b;
+    }
+
+    .documents-hint strong { color: #475569; }
+
+    @media (max-width: 900px) {
+      .documents-table th,
+      .documents-table td {
+        padding: 10px 12px;
+        font-size: 0.875rem;
+      }
+
+      .doc-actions .btn {
+        padding: 6px 8px;
+        font-size: 0.8125rem;
+      }
+    }
 
 /* Scoped fixed layout: only apply when on documents page */
 body.documents-page .app { display: flex; }
@@ -66,24 +129,205 @@ body.documents-page .sidebar { width: 260px; position: fixed; left: 0; top: 0; h
 body.documents-page .main { margin-left: 260px; width: calc(100% - 260px); }
 body.documents-page .main .header { position: sticky; top: 0; background: white; z-index: 30; }
 
-/* Truncated table cell preview */
-
-.td-truncate { 
-  max-width: 120px; /* shorter by default */
-  white-space: nowrap; 
-  overflow: hidden; 
-  text-overflow: ellipsis; 
-  cursor: pointer; 
+/* Legacy truncate (kept for any other tables); documents use .doc-cell-truncate */
+.td-truncate {
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   display: inline-block;
   vertical-align: middle;
-  transition: max-width 180ms ease, white-space 180ms ease;
 }
 
-/* expanded state - allow wrapping and larger width */
-.td-truncate--expanded {
-  max-width: 800px !important;
-  white-space: normal;
+/* Document Preview Modal – designed modal */
+.document-preview-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: document-preview-fadeIn 0.2s ease-out;
 }
 
-/* Text preview modal */
-/* modal removed; inline expansion used instead */
+@keyframes document-preview-fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.document-preview-modal {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  max-width: min(92vw, 680px);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: document-preview-slideUp 0.25s ease-out;
+}
+
+@keyframes document-preview-slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.document-preview-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.document-preview-header-inner {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  min-width: 0;
+}
+
+.document-preview-icon {
+  font-size: 1.75rem;
+  line-height: 1;
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+.document-preview-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.document-preview-subtitle {
+  margin: 4px 0 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: #fff;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.document-preview-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.12);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.document-preview-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(1.05);
+}
+
+.document-preview-close:active {
+  transform: scale(0.98);
+}
+
+.document-preview-body {
+  overflow: auto;
+  padding: 24px;
+  -webkit-overflow-scrolling: touch;
+  background: #f8fafc;
+}
+
+.document-preview-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.document-preview-section {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+}
+
+.document-preview-section-title {
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #1e293b;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.document-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 28px;
+  min-width: 0;
+}
+
+.document-preview-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  padding: 6px 0;
+}
+
+.document-preview-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.document-preview-value {
+  font-size: 0.9375rem;
+  color: #334155;
+  line-height: 1.45;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 640px) {
+  .document-preview-modal {
+    max-height: 90vh;
+  }
+
+  .document-preview-grid {
+    grid-template-columns: 1fr;
+    gap: 10px 0;
+  }
+
+  .document-preview-section {
+    padding: 14px 16px;
+  }
+}
